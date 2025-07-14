@@ -5,6 +5,7 @@ import javafx.application.Application;
 import javafx.geometry.Insets;
 import javafx.scene.Scene;
 import javafx.scene.control.Button;
+import javafx.scene.control.ComboBox;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
@@ -107,6 +108,14 @@ public class MainApp extends Application {
         }
         chartPanels.clear();
         chartPanels.addAll(newPanels);
+
+        // After adding new charts, trigger symbol change action for each chart
+        for (ChartPanel panel : chartPanels) {
+            ComboBox<String> pairBox = panel.getPairBox();
+            if (pairBox != null && pairBox.getOnAction() != null) {
+                pairBox.getOnAction().handle(null);
+            }
+        }
 
         // Add all panels to the grid
         for (int i = 0; i < chartPanels.size(); i++) {

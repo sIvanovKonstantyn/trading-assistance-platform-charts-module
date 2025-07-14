@@ -15,6 +15,7 @@ import java.util.HashMap;
 public class ChartPanel extends VBox {
     private static final String DEFAULT_DB_PATH = "../analitic-data-module/demo/usdc-symbol-dbs/BTCUSDC.db";
     private static final String[] PAIRS = {"BTCUSDC", "ETHUSDC", "BNBUSDC"};
+    private static final String DEFAULT_SYMBOL = "BTCUSDC";
 
     private ChartCanvas chartCanvas;
     private ChartController controller;
@@ -27,6 +28,10 @@ public class ChartPanel extends VBox {
     private String title;
 
     public ChartPanel(String title, double width, double height) {
+        this(title, width, height, DEFAULT_SYMBOL);
+    }
+
+    public ChartPanel(String title, double width, double height, String initialSymbol) {
         this.title = title;
         setPrefSize(width, height);
         setMinSize(width, height);
@@ -35,12 +40,12 @@ public class ChartPanel extends VBox {
 
         // Initialize chart canvas and controller
         chartCanvas = new ChartCanvas(); // Use default constructor
-        controller = new ChartController(chartCanvas, DEFAULT_DB_PATH);
+        controller = new ChartController(chartCanvas, getDbPathForSymbol(initialSymbol));
         indicatorMenu = new MenuButton("Indicators");
         indicatorChecks = new HashMap<>();
 
         // Create controls
-        createControls();
+        createControls(initialSymbol);
 
         // Create layout
         BorderPane chartContainer = new BorderPane();
@@ -55,9 +60,6 @@ public class ChartPanel extends VBox {
         chartCanvas.widthProperty().bind(canvasHolder.widthProperty());
         chartCanvas.heightProperty().bind(canvasHolder.heightProperty());
 
-        // Delay binding until scene and window are ready
-        // Remove old sceneProperty listener for binding
-
         // Add title
         Label titleLabel = new Label(title);
         titleLabel.setStyle("-fx-text-fill: #222; -fx-font-weight: bold; -fx-font-size: 14;"); // Dark text
@@ -68,13 +70,17 @@ public class ChartPanel extends VBox {
         VBox.setVgrow(chartContainer, javafx.scene.layout.Priority.ALWAYS); // Ensure chart area grows
 
         // Initial load
-        loadInitialData();
+        loadInitialData(initialSymbol);
     }
 
     private void createControls() {
+        createControls(DEFAULT_SYMBOL);
+    }
+
+    private void createControls(String initialSymbol) {
         pairBox = new ComboBox<>();
         pairBox.getItems().addAll(PAIRS);
-        pairBox.setValue(PAIRS[0]);
+        pairBox.setValue(initialSymbol);
         pairBox.setPrefWidth(100);
 
         tfBox = new ComboBox<>();
@@ -91,7 +97,14 @@ public class ChartPanel extends VBox {
 
         // Set up event handlers
         pairBox.setOnAction(e -> {
-            controller.setPair(pairBox.getValue());
+            // Recreate controller with new DB path
+            String selectedPair = pairBox.getValue();
+            controller = new ChartController(chartCanvas, getDbPathForSymbol(selectedPair));
+            controller.setPair(selectedPair);
+            // Immediately load data for the new symbol
+            controller.loadData(selectedPair, tfBox.getValue(),
+                startDatePicker.getValue().atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli(),
+                endDatePicker.getValue().atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli());
             updateIndicatorToggles();
         });
         
@@ -143,11 +156,15 @@ public class ChartPanel extends VBox {
     }
 
     private void loadInitialData() {
+        loadInitialData(DEFAULT_SYMBOL);
+    }
+
+    private void loadInitialData(String symbol) {
         LocalDate today = LocalDate.now();
         LocalDate weekAgo = today.minusDays(7);
         long startMs = weekAgo.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli();
         long endMs = today.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli();
-        controller.loadData(PAIRS[0], Timeframe.ONE_MIN, startMs, endMs);
+        controller.loadData(symbol, Timeframe.ONE_MIN, startMs, endMs);
         updateIndicatorToggles();
     }
 
@@ -160,14 +177,12 @@ public class ChartPanel extends VBox {
     }
 
     private void updateIndicatorToggles() {
-        System.out.println("Updating indicator toggles. Indicators: " + chartCanvas.getIndicators().keySet());
         indicatorMenu.getItems().clear();
         indicatorChecks.clear();
         for (String name : chartCanvas.getIndicators().keySet()) {
             CheckMenuItem cb = new CheckMenuItem(name);
             cb.setSelected(true);
             cb.setOnAction(e -> {
-                System.out.println("MenuItem toggled: " + name + " -> " + cb.isSelected());
                 chartCanvas.setIndicatorEnabled(name, cb.isSelected());
             });
             indicatorMenu.getItems().add(cb);
@@ -185,6 +200,10 @@ public class ChartPanel extends VBox {
 
     public void setTitle(String title) {
         this.title = title;
+    }
+
+    public ComboBox<String> getPairBox() {
+        return pairBox;
     }
 
     // State holder for copying chart filters
@@ -233,5 +252,9 @@ public class ChartPanel extends VBox {
         if (start != null) startDatePicker.setValue(start);
         if (end != null) endDatePicker.setValue(end);
         reloadWithDates();
+    }
+
+    private static String getDbPathForSymbol(String symbol) {
+        return "../analitic-data-module/demo/usdc-symbol-dbs/" + symbol + ".db";
     }
 } 

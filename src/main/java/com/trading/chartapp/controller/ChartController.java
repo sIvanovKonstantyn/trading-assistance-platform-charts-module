@@ -29,9 +29,13 @@ public class ChartController {
 
     public void loadData(String pair, Timeframe tf, long startDate, long endDate) {
         try {
+            System.out.println("[ChartController] Connecting to DB: " + dbPath);
+            System.out.println("[ChartController] Loading data for symbol: " + pair + ", timeframe: " + tf + ", start: " + startDate + ", end: " + endDate);
             db.connect(dbPath);
             List<Candlestick> candles = db.loadCandlesticks(pair, tf, startDate, endDate);
+            System.out.println("[ChartController] Loaded " + candles.size() + " candles");
             Map<String, Indicator> indicators = db.loadIndicators(pair, tf, startDate, endDate);
+            System.out.println("[ChartController] Loaded " + indicators.size() + " indicators");
             chartCanvas.drawCandlesticks(candles);
             chartCanvas.drawIndicators(indicators);
             this.currentPair = pair;
