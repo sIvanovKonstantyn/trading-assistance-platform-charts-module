@@ -11,11 +11,17 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.HashMap;
+import javafx.stage.Stage;
+import javafx.scene.shape.SVGPath;
+import javafx.geometry.Pos;
+import javafx.scene.control.ContentDisplay;
 
 public class ChartPanel extends VBox {
     private static final String DEFAULT_DB_PATH = "../analitic-data-module/demo/usdc-symbol-dbs/BTCUSDC.db";
     private static final String[] PAIRS = {"BTCUSDC", "ETHUSDC", "BNBUSDC"};
     private static final String DEFAULT_SYMBOL = "BTCUSDC";
+    private static final double CONTROL_HEIGHT = 14; // 2 points smaller icon height for nav/fullscreen buttons
+    private static final double BUTTON_SIZE = 25; // 1 point bigger, square buttons
 
     private ChartCanvas chartCanvas;
     private ChartController controller;
@@ -26,6 +32,10 @@ public class ChartPanel extends VBox {
     private DatePicker startDatePicker;
     private DatePicker endDatePicker;
     private String title;
+    private Button fullscreenBtn;
+    private boolean isFullscreen = false;
+    private Runnable onFullscreenToggle = null;
+    private Stage fullscreenStage = null;
 
     public ChartPanel(String title, double width, double height) {
         this(title, width, height, DEFAULT_SYMBOL);
@@ -124,9 +134,77 @@ public class ChartPanel extends VBox {
         });
     }
 
+    private SVGPath createLeftArrowIcon() {
+        SVGPath svg = new SVGPath();
+        svg.setContent("M 15 2 L 5 12 L 15 22");
+        svg.setStyle("-fx-stroke: #333; -fx-stroke-width: 2; -fx-fill: none;");
+        svg.setScaleX(CONTROL_HEIGHT / 24.0);
+        svg.setScaleY(CONTROL_HEIGHT / 24.0);
+        return svg;
+    }
+    private SVGPath createRightArrowIcon() {
+        SVGPath svg = new SVGPath();
+        svg.setContent("M 9 2 L 19 12 L 9 22");
+        svg.setStyle("-fx-stroke: #333; -fx-stroke-width: 2; -fx-fill: none;");
+        svg.setScaleX(CONTROL_HEIGHT / 24.0);
+        svg.setScaleY(CONTROL_HEIGHT / 24.0);
+        return svg;
+    }
+    private SVGPath createMaximizeIcon() {
+        SVGPath svg = new SVGPath();
+        svg.setContent("M3 3 H21 V21 H3 Z");
+        svg.setStyle("-fx-stroke: #333; -fx-stroke-width: 2; -fx-fill: none;");
+        svg.setScaleX(CONTROL_HEIGHT / 24.0);
+        svg.setScaleY(CONTROL_HEIGHT / 24.0);
+        return svg;
+    }
+    private SVGPath createMinimizeIcon() {
+        SVGPath svg = new SVGPath();
+        svg.setContent("M5 12 H19");
+        svg.setStyle("-fx-stroke: #333; -fx-stroke-width: 2; -fx-fill: none;");
+        svg.setScaleX(CONTROL_HEIGHT / 24.0);
+        svg.setScaleY(CONTROL_HEIGHT / 24.0);
+        return svg;
+    }
+
     private HBox createToolPanel() {
-        Button prevBtn = new Button("Prev");
-        Button nextBtn = new Button("Next");
+        Button prevBtn = new Button();
+        prevBtn.setGraphic(createLeftArrowIcon());
+        prevBtn.setMinHeight(BUTTON_SIZE);
+        prevBtn.setPrefHeight(BUTTON_SIZE);
+        prevBtn.setMaxHeight(BUTTON_SIZE);
+        prevBtn.setMinWidth(BUTTON_SIZE);
+        prevBtn.setPrefWidth(BUTTON_SIZE);
+        prevBtn.setMaxWidth(BUTTON_SIZE);
+        prevBtn.setAlignment(Pos.CENTER);
+        prevBtn.setContentDisplay(ContentDisplay.GRAPHIC_ONLY);
+        Button nextBtn = new Button();
+        nextBtn.setGraphic(createRightArrowIcon());
+        nextBtn.setMinHeight(BUTTON_SIZE);
+        nextBtn.setPrefHeight(BUTTON_SIZE);
+        nextBtn.setMaxHeight(BUTTON_SIZE);
+        nextBtn.setMinWidth(BUTTON_SIZE);
+        nextBtn.setPrefWidth(BUTTON_SIZE);
+        nextBtn.setMaxWidth(BUTTON_SIZE);
+        nextBtn.setAlignment(Pos.CENTER);
+        nextBtn.setContentDisplay(ContentDisplay.GRAPHIC_ONLY);
+        fullscreenBtn = new Button();
+        fullscreenBtn.setGraphic(createMaximizeIcon());
+        fullscreenBtn.setMinHeight(BUTTON_SIZE);
+        fullscreenBtn.setPrefHeight(BUTTON_SIZE);
+        fullscreenBtn.setMaxHeight(BUTTON_SIZE);
+        fullscreenBtn.setMinWidth(BUTTON_SIZE);
+        fullscreenBtn.setPrefWidth(BUTTON_SIZE);
+        fullscreenBtn.setMaxWidth(BUTTON_SIZE);
+        fullscreenBtn.setAlignment(Pos.CENTER);
+        fullscreenBtn.setContentDisplay(ContentDisplay.GRAPHIC_ONLY);
+        fullscreenBtn.setOnAction(e -> {
+            if (fullscreenStage == null) {
+                openFullscreenWindow();
+            } else {
+                fullscreenStage.close();
+            }
+        });
 
         prevBtn.setOnAction(e -> {
             LocalDate start = startDatePicker.getValue();
@@ -148,7 +226,7 @@ public class ChartPanel extends VBox {
             updateIndicatorToggles();
         });
 
-        HBox controls = new HBox(5, pairBox, tfBox, prevBtn, startDatePicker, endDatePicker, nextBtn, indicatorMenu);
+        HBox controls = new HBox(5, pairBox, tfBox, prevBtn, startDatePicker, endDatePicker, nextBtn, indicatorMenu, fullscreenBtn);
         controls.setPadding(new Insets(5));
         controls.setStyle("-fx-background-color: #f0f0f0; -fx-border-color: #cccccc; -fx-border-width: 0 0 1 0;"); // Light gray with bottom border
         
@@ -256,5 +334,33 @@ public class ChartPanel extends VBox {
 
     private static String getDbPathForSymbol(String symbol) {
         return "../analitic-data-module/demo/usdc-symbol-dbs/" + symbol + ".db";
+    }
+
+    public void setOnFullscreenToggle(Runnable r) {
+        this.onFullscreenToggle = r;
+    }
+    public boolean isFullscreen() {
+        return isFullscreen;
+    }
+    public void setFullscreen(boolean fullscreen) {
+        this.isFullscreen = fullscreen;
+        fullscreenBtn.setGraphic(fullscreen ? createMinimizeIcon() : createMaximizeIcon());
+    }
+
+    private void openFullscreenWindow() {
+        ChartPanel.ChartState state = getChartState();
+        ChartPanel fullscreenPanel = new ChartPanel(title, 1200, 800, state.pair); // Use current symbol
+        fullscreenPanel.applyChartState(state);
+        fullscreenPanel.setTitle(this.title + " (Fullscreen)");
+        fullscreenPanel.fullscreenBtn.setGraphic(createMinimizeIcon());
+        fullscreenPanel.fullscreenBtn.setOnAction(e -> {
+            if (fullscreenStage != null) fullscreenStage.close();
+        });
+        fullscreenStage = new Stage();
+        fullscreenStage.setTitle(title + " (Fullscreen)");
+        fullscreenStage.setScene(new javafx.scene.Scene(fullscreenPanel, 1200, 800));
+        fullscreenStage.setMaximized(true);
+        fullscreenStage.show();
+        fullscreenStage.setOnCloseRequest(e -> fullscreenStage = null);
     }
 } 

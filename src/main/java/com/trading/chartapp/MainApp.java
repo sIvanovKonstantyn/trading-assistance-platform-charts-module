@@ -12,6 +12,7 @@ import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
 import java.util.ArrayList;
 import java.util.List;
+import javafx.scene.shape.SVGPath;
 
 public class MainApp extends Application {
     private GridPane gridPane;
@@ -19,6 +20,8 @@ public class MainApp extends Application {
     private int chartCounter = 1;
     private int sceneWidth = 1250;
     private int sceneHeight = 900;
+    private ChartPanel fullscreenPanel = null;
+    private List<ChartPanel> prevPanelsState = null;
 
     @Override
     public void start(Stage primaryStage) {
@@ -37,8 +40,16 @@ public class MainApp extends Application {
         controlPanel.setPadding(new Insets(10));
         controlPanel.setStyle("-fx-background-color: #f0f0f0; -fx-border-color: #cccccc; -fx-border-width: 0 0 1 0;"); // Light gray with bottom border
         
-        Button addChartBtn = new Button("Add Chart");
-        Button removeChartBtn = new Button("Remove Chart");
+        Button addChartBtn = new Button();
+        addChartBtn.setGraphic(createPlusIcon());
+        addChartBtn.setMinHeight(28);
+        addChartBtn.setPrefHeight(28);
+        addChartBtn.setMaxHeight(28);
+        Button removeChartBtn = new Button();
+        removeChartBtn.setGraphic(createMinusIcon());
+        removeChartBtn.setMinHeight(28);
+        removeChartBtn.setPrefHeight(28);
+        removeChartBtn.setMaxHeight(28);
         
         addChartBtn.setOnAction(e -> addChart());
         removeChartBtn.setOnAction(e -> removeChart());
@@ -115,6 +126,8 @@ public class MainApp extends Application {
             if (pairBox != null && pairBox.getOnAction() != null) {
                 pairBox.getOnAction().handle(null);
             }
+            // Set up fullscreen toggle listener
+            panel.setOnFullscreenToggle(() -> handleFullscreenToggle(panel));
         }
 
         // Add all panels to the grid
@@ -192,6 +205,105 @@ public class MainApp extends Application {
             panel.setPrefSize(0, 0);
             panel.setMinSize(0, 0);
         }
+    }
+
+    private void handleFullscreenToggle(ChartPanel panel) {
+        if (panel.isFullscreen()) {
+            // Enter fullscreen: hide all other panels, expand this one
+            fullscreenPanel = panel;
+            prevPanelsState = new ArrayList<>(chartPanels);
+            gridPane.getChildren().clear();
+            gridPane.getColumnConstraints().clear();
+            gridPane.getRowConstraints().clear();
+            javafx.scene.layout.ColumnConstraints cc = new javafx.scene.layout.ColumnConstraints();
+            cc.setPercentWidth(100);
+            cc.setHgrow(javafx.scene.layout.Priority.ALWAYS);
+            gridPane.getColumnConstraints().add(cc);
+            javafx.scene.layout.RowConstraints rc = new javafx.scene.layout.RowConstraints();
+            rc.setPercentHeight(100);
+            rc.setVgrow(javafx.scene.layout.Priority.ALWAYS);
+            gridPane.getRowConstraints().add(rc);
+            gridPane.add(panel, 0, 0);
+            GridPane.setFillWidth(panel, true);
+            GridPane.setFillHeight(panel, true);
+            VBox.setVgrow(panel, javafx.scene.layout.Priority.ALWAYS);
+            panel.setPrefSize(Double.MAX_VALUE, Double.MAX_VALUE);
+            panel.setMinSize(0, 0);
+            panel.setMaxSize(Double.MAX_VALUE, Double.MAX_VALUE);
+            for (ChartPanel p : chartPanels) {
+                if (p != panel) p.setVisible(false);
+            }
+            panel.requestLayout();
+            gridPane.requestLayout();
+        } else {
+            // Exit fullscreen: restore all panels and layout
+            if (prevPanelsState != null) {
+                gridPane.getChildren().clear();
+                gridPane.getColumnConstraints().clear();
+                gridPane.getRowConstraints().clear();
+                chartPanels.clear();
+                chartPanels.addAll(prevPanelsState);
+                int numCharts = chartPanels.size();
+                int cols, rows;
+                if (numCharts == 1) {
+                    cols = 1; rows = 1;
+                } else if (numCharts == 2) {
+                    cols = 2; rows = 1;
+                } else if (numCharts <= 4) {
+                    cols = 2; rows = 2;
+                } else if (numCharts <= 6) {
+                    cols = 3; rows = 2;
+                } else {
+                    cols = 3; rows = 3;
+                }
+                for (int c = 0; c < cols; c++) {
+                    javafx.scene.layout.ColumnConstraints cc = new javafx.scene.layout.ColumnConstraints();
+                    cc.setPercentWidth(100.0 / cols);
+                    cc.setHgrow(javafx.scene.layout.Priority.ALWAYS);
+                    gridPane.getColumnConstraints().add(cc);
+                }
+                for (int r = 0; r < rows; r++) {
+                    javafx.scene.layout.RowConstraints rc = new javafx.scene.layout.RowConstraints();
+                    rc.setPercentHeight(100.0 / rows);
+                    rc.setVgrow(javafx.scene.layout.Priority.ALWAYS);
+                    gridPane.getRowConstraints().add(rc);
+                }
+                for (int i = 0; i < chartPanels.size(); i++) {
+                    int row = i / cols;
+                    int col = i % cols;
+                    ChartPanel p = chartPanels.get(i);
+                    gridPane.add(p, col, row);
+                    GridPane.setFillWidth(p, true);
+                    GridPane.setFillHeight(p, true);
+                    VBox.setVgrow(p, javafx.scene.layout.Priority.ALWAYS);
+                    p.setPrefSize(0, 0);
+                    p.setMinSize(0, 0);
+                    p.setMaxSize(Double.MAX_VALUE, Double.MAX_VALUE);
+                    p.setVisible(true);
+                    p.setFullscreen(false);
+                }
+                fullscreenPanel = null;
+                prevPanelsState = null;
+                gridPane.requestLayout();
+            }
+        }
+    }
+
+    private SVGPath createPlusIcon() {
+        SVGPath svg = new SVGPath();
+        svg.setContent("M12 5 V19 M5 12 H19");
+        svg.setStyle("-fx-stroke: #333; -fx-stroke-width: 2; -fx-fill: none;");
+        svg.setScaleX(20.0 / 24.0);
+        svg.setScaleY(20.0 / 24.0);
+        return svg;
+    }
+    private SVGPath createMinusIcon() {
+        SVGPath svg = new SVGPath();
+        svg.setContent("M5 12 H19");
+        svg.setStyle("-fx-stroke: #333; -fx-stroke-width: 2; -fx-fill: none;");
+        svg.setScaleX(20.0 / 24.0);
+        svg.setScaleY(20.0 / 24.0);
+        return svg;
     }
 
     public static void main(String[] args) {
